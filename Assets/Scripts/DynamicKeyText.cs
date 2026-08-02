@@ -1,56 +1,80 @@
 using UnityEngine;
 using TMPro;
+using System.Text;
+using NodeZero.Core;
 
-[RequireComponent(typeof(TextMeshProUGUI))]
-public class DynamicKeyText : MonoBehaviour
+namespace NodeZero.UI
 {
-    [TextArea(2, 5)]
-    [Tooltip("Используйте фигурные скобки для подстановки. Пример: '{InspectPutBack} - Вернуть | {InspectTake} - Забрать'")]
-    public string templateText = "{InspectPutBack} - Вернуть | {InspectTake} - Забрать";
-
-    private TextMeshProUGUI textComponent;
-    private CanvasGroup canvasGroup;
-
-    void Awake()
+    [RequireComponent(typeof(TextMeshProUGUI))]
+    public class DynamicKeyText : MonoBehaviour
     {
-        textComponent = GetComponent<TextMeshProUGUI>();
+        [TextArea(2, 5)]
+        [Tooltip("Используйте фигурные скобки для подстановки. Пример: '{InspectPutBack} - Вернуть'")]
+        [SerializeField] private string _templateText = "{InspectPutBack} - Вернуть | {InspectTake} - Забрать";
 
-        // Автоматически ищем или добавляем CanvasGroup для быстрой и плавной видимости
-        canvasGroup = GetComponent<CanvasGroup>();
-        if (canvasGroup == null)
+        private TextMeshProUGUI _textComponent;
+        private CanvasGroup _canvasGroup;
+        private StringBuilder _sb = new StringBuilder(128);
+
+        // Список всех потенциальных действий для кэширования тегов
+        private static readonly string[] _actionNames = {
+            "Interact", "Flashlight", "Notebook", "InspectTake", "InspectPutBack", "Crouch", "Jump", "Sprint"
+        };
+        private static string[] _cachedTags;
+
+        private void Awake()
         {
-            canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            _textComponent = GetComponent<TextMeshProUGUI>();
+
+            _canvasGroup = GetComponent<CanvasGroup>();
+            if (_canvasGroup == null)
+            {
+                _canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            }
+
+            InitializeTags();
+            SetVisibility(false);
         }
 
-        UpdateText();
-        SetVisibility(false); // Скрываем при старте
-    }
-
-    public void UpdateText()
-    {
-        if (SettingsManager.Instance == null) return;
-
-        string finalText = templateText;
-
-        foreach (var kvp in SettingsManager.Instance.keys)
+        private void Start()
         {
-            string tag = "{" + kvp.Key + "}";
-            if (finalText.Contains(tag))
+            UpdateText();
+        }
+
+        private void InitializeTags()
+        {
+            if (_cachedTags == null)
             {
-                finalText = finalText.Replace(tag, SettingsManager.Instance.GetKeyName(kvp.Key));
+                _cachedTags = new string[_actionNames.Length];
+                for (int i = 0; i < _actionNames.Length; i++)
+                {
+                    _cachedTags[i] = "{" + _actionNames[i] + "}";
+                }
             }
         }
 
-        textComponent.text = finalText;
-    }
-
-    // Управляем видимостью через пропуск света/видимость группы (нулевой фриз)
-    public void SetVisibility(bool isVisible)
-    {
-        if (canvasGroup != null)
+        public void UpdateText()
         {
-            canvasGroup.alpha = isVisible ? 1f : 0f;
-            canvasGroup.blocksRaycasts = isVisible;
+            if (SettingsManager.Instance == null) return;
+
+            _sb.Clear();
+            _sb.Append(_templateText);
+
+            for (int i = 0; i < _actionNames.Length; i++)
+            {
+                _sb.Replace(_cachedTags[i], SettingsManager.Instance.GetKeyName(_actionNames[i]));
+            }
+
+            _textComponent.text = _sb.ToString();
+        }
+
+        public void SetVisibility(bool isVisible)
+        {
+            if (_canvasGroup != null)
+            {
+                _canvasGroup.alpha = isVisible ? 1f : 0f;
+                _canvasGroup.blocksRaycasts = isVisible;
+            }
         }
     }
 }
